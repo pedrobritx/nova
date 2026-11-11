@@ -20,7 +20,7 @@ async function feed(url: string, title: string): Promise<string> {
   return row.nova_upsert_feed;
 }
 
-type Item = { guid: string; title: string; url?: string; linkKey?: string | null; contentHash?: string | null; publishedAt?: string; contentHtml?: string };
+type Item = { guid: string; title: string; url?: string; linkKey?: string | null; contentHash?: string | null; publishedAt?: string; contentHtml?: string; imageUrl?: string; author?: string };
 async function ingest(feedId: string, items: Item[]): Promise<number> {
   const [row] = await svc.rpc<{ nova_ingest_items: number }>("nova_ingest_items", {
     p_feed_id: feedId,
@@ -240,5 +240,53 @@ describe("corrections", () => {
     const latest = await ana.rpc<{ story_id: string; merged_by: string | null; feed_title: string }>("nova_latest");
     expect(new Set(latest.map((l) => l.story_id)).size).toBe(1);
     expect(latest.find((l) => l.feed_title === "B")?.merged_by).toBe("copy");
+  });
+  test("a corrected headline names the story everywhere you see it", async () => {
+    const a = await feed("https://a.example/rss", "A");
+    const b = await feed("https://b.example/rss", "B");
+    for (const f of [a, b]) await ana.rpc("nova_follow", { p_feed: f });
+    await ingest(a, [{ guid: "1", title: "Draft headline", linkKey: "news.example/x", contentHtml: `<p>${LONG}</p>`, publishedAt: hoursAgo(3) }]);
+    await ingest(b, [{ guid: "1", title: "Short follow-up", linkKey: "news.example/x", publishedAt: hoursAgo(2) }]);
+    await ingest(a, [{ guid: "1", title: "Corrected headline", linkKey: "news.example/x", contentHtml: `<p>${LONG}</p>`, publishedAt: hoursAgo(3) }]);
+
+    const [today] = await ana.rpc<{ story_id: string; title: string }>("nova_today");
+    const story = await ana.rpc<{ story_title: string }>("nova_story", { p_story: today.story_id });
+    expect(today.title).toBe("Corrected headline");
+    expect(new Set(story.map((s) => s.story_title))).toEqual(new Set(["Corrected headline"]));
+  });
+
+  test("a story is never named by a feed you do not follow", async () => {
+    const theirs = await feed("https://theirs.example/rss", "Theirs");
+    const mine = await feed("https://mine.example/rss", "Mine");
+    await ben.rpc("nova_follow", { p_feed: theirs });
+    await ana.rpc("nova_follow", { p_feed: mine });
+    await ingest(theirs, [{ guid: "1", title: "Their headline", linkKey: "news.example/y", publishedAt: hoursAgo(3) }]);
+    await ingest(mine, [{ guid: "1", title: "My headline", linkKey: "news.example/y", publishedAt: hoursAgo(2) }]);
+
+    const [item] = await ana.rpc<{ story_id: string }>("nova_latest");
+    const story = await ana.rpc<{ story_title: string; title: string }>("nova_story", { p_story: item.story_id });
+    expect(story).toHaveLength(1);
+    expect(story[0]).toMatchObject({ story_title: "My headline", title: "My headline" });
+  });
+
+  test("a new address, picture or author is applied even when the text is unchanged", async () => {
+    const a = await feed("https://a.example/rss", "A");
+    const b = await feed("https://b.example/rss", "B");
+    for (const f of [a, b]) await ana.rpc("nova_follow", { p_feed: f });
+    const same = { guid: "1", title: "Same title", contentHtml: "<p>same</p>", publishedAt: hoursAgo(3) };
+    await ingest(a, [{ ...same, url: "https://a.example/old", linkKey: "a.example/old" }]);
+    await ingest(a, [{ ...same, url: "https://a.example/new", linkKey: "a.example/new" }]);
+    await ingest(a, [{ ...same, url: "https://a.example/new", linkKey: "a.example/new", imageUrl: "https://a.example/new.jpg", author: "Rita" }]);
+
+    const [item] = await ana.rpc<{ item_id: string; url: string; image_url: string; author: string }>("nova_item", {
+      p_item: (await ana.rpc<{ item_id: string }>("nova_latest"))[0].item_id,
+    });
+    expect(item).toMatchObject({ url: "https://a.example/new", image_url: "https://a.example/new.jpg", author: "Rita" });
+
+    // Later items are compared with the current address, not the old one.
+    await ingest(b, [{ guid: "x", title: "Link to it", linkKey: "a.example/new", publishedAt: hoursAgo(2) }]);
+    const latest = await ana.rpc<{ story_id: string; feed_title: string; merged_by: string | null }>("nova_latest");
+    expect(new Set(latest.map((l) => l.story_id)).size).toBe(1);
+    expect(latest.find((l) => l.feed_title === "B")?.merged_by).toBe("link");
   });
 });

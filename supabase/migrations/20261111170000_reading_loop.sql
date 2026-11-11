@@ -218,14 +218,18 @@ begin
 
     select id into v_existing from public.items where feed_id = p_feed_id and guid = it ->> 'guid';
     if v_existing is not null then
-      -- A feed corrected an item: replace its text and its fingerprint together, so later
-      -- copies are compared with what is actually stored. Its story stays as it is.
+      -- A feed corrected an item: replace its text, address and fingerprints together, so the
+      -- Reader opens the current address and later items are compared with what is actually
+      -- stored. The row is written only when something changed. Its story stays as it is.
       update public.items set
         title = it ->> 'title', excerpt = it ->> 'excerpt', content_html = it ->> 'contentHtml', content_hash = v_hash,
         url = coalesce(it ->> 'url', url), link_key = coalesce(v_link, link_key),
         image_url = coalesce(it ->> 'imageUrl', image_url), author = coalesce(it ->> 'author', author)
-      where id = v_existing and (title, coalesce(excerpt, ''), coalesce(content_html, ''), coalesce(content_hash, ''))
-        is distinct from (it ->> 'title', coalesce(it ->> 'excerpt', ''), coalesce(it ->> 'contentHtml', ''), coalesce(v_hash, ''));
+      where id = v_existing
+        and (title, excerpt, content_html, content_hash, url, link_key, image_url, author)
+        is distinct from (it ->> 'title', it ->> 'excerpt', it ->> 'contentHtml', v_hash,
+                          coalesce(it ->> 'url', url), coalesce(v_link, link_key),
+                          coalesce(it ->> 'imageUrl', image_url), coalesce(it ->> 'author', author));
       continue;
     end if;
 
@@ -311,7 +315,7 @@ returns table (
   cross join lateral (
     select v.* from visible v where v.story_id = g.story_id
     -- Lead with the fullest original: never a copy, a picture if there is one, then the most text.
-    order by coalesce(v.merged_by = 'copy', false), (v.image_url is null), length(coalesce(v.content_html, '')) desc, v.published_at
+    order by coalesce(v.merged_by = 'copy', false), (v.image_url is null), length(coalesce(v.content_html, '')) desc, v.published_at, v.id
     limit 1
   ) lead
   where g.unread_count > 0 or g.last_item_at > now() - interval '6 hours'
@@ -344,22 +348,28 @@ returns table (
 $$;
 
 -- One story and every item in it you can see, oldest first, with why each was merged.
+-- Its heading is the current headline of the item Today leads with, chosen only from your
+-- own sources, so a corrected headline shows everywhere and a feed you do not follow never
+-- names the story.
 create function public.nova_story(p_story uuid)
 returns table (
   story_id uuid, story_title text, item_id uuid, title text, url text, excerpt text, image_url text,
   published_at timestamptz, feed_id uuid, feed_title text, folder_name text, merged_by text, is_read boolean, content_length integer
 ) language sql stable security invoker set search_path = '' as $$
-  select sto.id, sto.title, i.id, i.title, i.url, i.excerpt, i.image_url, i.published_at,
+  select i.story_id,
+         first_value(i.title) over (
+           order by coalesce(i.merged_by = 'copy', false), (i.image_url is null), length(coalesce(i.content_html, '')) desc, i.published_at, i.id
+         ),
+         i.id, i.title, i.url, i.excerpt, i.image_url, i.published_at,
          i.feed_id, coalesce(s.title, f.title), fo.name, i.merged_by, (st.item_id is not null),
          length(coalesce(i.content_html, ''))
-  from public.stories sto
-  join public.items i on i.story_id = sto.id
+  from public.items i
   join public.subscriptions s on s.feed_id = i.feed_id and s.user_id = (select auth.uid())
   join public.feeds f on f.id = i.feed_id
   left join public.folders fo on fo.id = s.folder_id
   left join public.item_states st on st.item_id = i.id and st.user_id = (select auth.uid())
-  where sto.id = p_story
-  order by i.published_at;
+  where i.story_id = p_story
+  order by i.published_at, i.id;
 $$;
 
 -- One item to read, with how many of your sources covered its story.
