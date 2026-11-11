@@ -1,8 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-
-type Appearance = "system" | "dawn" | "dusk";
+import { type Appearance, applyAppearance as apply } from "@/lib/appearance";
 
 const listeners = new Set<() => void>();
 const subscribe = (fn: () => void) => {
@@ -25,13 +24,6 @@ function write(key: string, value: string) {
     /* private mode: the choice lasts for this page only */
   }
   listeners.forEach((fn) => fn());
-}
-
-function apply(appearance: Appearance, texture: string) {
-  const root = document.documentElement;
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  root.dataset.appearance = appearance === "system" ? (dark ? "dusk" : "dawn") : appearance;
-  root.dataset.texture = texture;
 }
 
 /** Dawn, Dusk or the system's choice, and the ground texture. Saved on this device. */
