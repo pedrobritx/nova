@@ -17,6 +17,8 @@ function authorised(request: Request): boolean {
 
 export async function POST(request: Request) {
   if (!authorised(request)) return Response.json({ error: "Unauthorised" }, { status: 401 });
-  const result = await refreshDue(await fetcherDb(), { limit: 60, budgetMs: 50_000, concurrency: 8 });
+  // 40 s of fetching leaves room to record outcomes inside the 60 s function limit and the
+  // 60 s timeout Supabase Cron waits for.
+  const result = await refreshDue(await fetcherDb(), { limit: 60, budgetMs: 40_000, concurrency: 8 });
   return Response.json(result, { headers: { "cache-control": "no-store" } });
 }

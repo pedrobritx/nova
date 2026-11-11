@@ -76,6 +76,8 @@ export type FetchOptions = {
   maxBytes?: number;
   /** Tests only: allow loopback so a local server can stand in for the web. */
   allowPrivate?: boolean;
+  /** Abort early, for example when a scheduled refresh reaches its time budget. */
+  signal?: AbortSignal;
 };
 
 export type FetchResult = {
@@ -146,7 +148,7 @@ export async function safeFetch(raw: string, options: FetchOptions = {}): Promis
   const allowPrivate = options.allowPrivate ?? false;
   const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
   let url = checkUrl(raw, allowPrivate);
-  const signal = AbortSignal.timeout(20_000);
+  const signal = options.signal ? AbortSignal.any([AbortSignal.timeout(20_000), options.signal]) : AbortSignal.timeout(20_000);
 
   for (let hop = 0; hop <= 5; hop++) {
     const headers: Record<string, string> = { "user-agent": USER_AGENT, accept: ACCEPT, "accept-encoding": "gzip, deflate, br" };

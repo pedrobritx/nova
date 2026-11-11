@@ -71,3 +71,23 @@ test("ingestion retries when Postgres breaks a deadlock, and only then", async (
   await expect(retryOnConflict(async () => { other++; throw Object.assign(new Error("permission denied"), { code: "42501" }); })).rejects.toThrow(/permission/);
   expect(other).toBe(1);
 });
+
+test("a fetch cut off by the run's time budget is not counted against the feed", async () => {
+  const slow = createServer((_req, res) => {
+    setTimeout(() => res.writeHead(200, { "content-type": "application/rss+xml" }).end(rss(["Late"])), 1_500);
+  });
+  await new Promise<void>((r) => slow.listen(0, "127.0.0.1", r));
+  try {
+    const pg = await createPglite();
+    await ensureUser(pg, USER, "c@example.com");
+    const service = pgliteDb(pg, null);
+    const url = `http://127.0.0.1:${(slow.address() as AddressInfo).port}/feed`;
+    const [{ nova_upsert_feed: id }] = await service.rpc<{ nova_upsert_feed: string }>("nova_upsert_feed", { p_url: url, p_title: "", p_site_url: null, p_format: null, p_description: null });
+    const outcome = await refreshFeed(service, { id, url, etag: null, last_modified: null }, { allowPrivate: true, signal: AbortSignal.timeout(200) });
+    expect(outcome).toMatchObject({ ok: false, stopped: true });
+    const { rows } = await pg.query<{ error_count: number; last_fetched_at: Date | null }>("select error_count, last_fetched_at from public.feeds where id = $1", [id]);
+    expect(rows[0]).toEqual({ error_count: 0, last_fetched_at: null });
+  } finally {
+    slow.close();
+  }
+});

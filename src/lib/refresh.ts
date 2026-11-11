@@ -5,7 +5,7 @@ import { parseFeedText, type ParsedFeed } from "./feeds/parse";
 
 export type FeedRow = { id: string; url: string; etag: string | null; last_modified: string | null };
 
-export type FeedOutcome = { feedId: string; ok: boolean; newItems: number; error?: string };
+export type FeedOutcome = { feedId: string; ok: boolean; newItems: number; error?: string; stopped?: boolean };
 
 /**
  * Run a database write again when Postgres aborted it to break a deadlock or a serialisation
@@ -62,6 +62,9 @@ export async function refreshFeed(service: Db, feed: FeedRow, fetchOptions: Fetc
     await recordFetch(service, feed.id, { ok: true, etag: res.etag, lastModified: res.lastModified, title: parsed.title, siteUrl: parsed.siteUrl, retryAfter: res.retryAfter });
     return { feedId: feed.id, ok: true, newItems: row?.nova_ingest_items ?? 0 };
   } catch (err) {
+    // Stopped by the run's time budget, not by the site: record nothing, so the feed is not
+    // penalised. Its claim expires and the next run picks it up.
+    if (fetchOptions.signal?.aborted) return { feedId: feed.id, ok: false, newItems: 0, error: "Stopped at the time limit", stopped: true };
     const error = describe(err);
     await recordFetch(service, feed.id, { ok: false, error }).catch(() => {});
     return { feedId: feed.id, ok: false, newItems: 0, error };
@@ -93,15 +96,22 @@ export async function pool<T, R>(items: T[], limit: number, deadline: number, ru
   return out;
 }
 
-/** Claim the feeds that are due and refresh them, within a time budget. */
+/**
+ * Claim the feeds that are due and refresh them within a time budget. No fetch starts in the
+ * budget's last five seconds, and any still running when it ends are aborted, so the run
+ * finishes (and records what it did) inside the caller's own time limit.
+ */
 export async function refreshDue(service: Db, opts: { limit?: number; budgetMs?: number; concurrency?: number } = {}) {
-  const deadline = Date.now() + (opts.budgetMs ?? 45_000);
+  const budget = opts.budgetMs ?? 40_000;
+  const deadline = Date.now() + budget;
+  const stop = AbortSignal.timeout(budget);
   const due = await service.rpc<FeedRow>("nova_claim_due_feeds", { p_limit: opts.limit ?? 40 });
-  const outcomes = await pool(due, opts.concurrency ?? 6, deadline, (f) => refreshFeed(service, f));
+  const outcomes = await pool(due, opts.concurrency ?? 6, deadline - 5_000, (f) => refreshFeed(service, f, { signal: stop }));
   return {
     claimed: due.length,
     fetched: outcomes.length,
-    failed: outcomes.filter((o) => !o.ok).length,
+    failed: outcomes.filter((o) => !o.ok && !o.stopped).length,
+    stopped: outcomes.filter((o) => o.stopped).length,
     newItems: outcomes.reduce((n, o) => n + o.newItems, 0),
   };
 }

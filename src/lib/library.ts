@@ -78,12 +78,16 @@ export async function importOpml(user: Db, service: Db, xml: string, budgetMs = 
     await user.rpc("nova_follow", { p_feed: id, p_folder_name: s.folder, p_title: s.title });
     rows.push({ id, url: s.url, title: s.title ?? s.url });
   }
-  const outcomes = await pool(rows, 6, Date.now() + budgetMs, async (r) => ({ ...(await refreshFeed(service, { id: r.id, url: r.url, etag: null, last_modified: null })), title: r.title }));
+  const stop = AbortSignal.timeout(budgetMs);
+  const outcomes = await pool(rows, 6, Date.now() + budgetMs - 5_000, async (r) => ({
+    ...(await refreshFeed(service, { id: r.id, url: r.url, etag: null, last_modified: null }, { signal: stop })),
+    title: r.title,
+  }));
   return {
     added: rows.length,
     folders: [...new Set(checked.filter((c) => !c.error).map((c) => c.source.folder).filter((f): f is string => !!f))],
     fetched: outcomes.filter((o) => o.ok).length,
-    failed: [...rejected, ...outcomes.filter((o) => !o.ok).map((o) => ({ title: o.title, error: o.error ?? "Could not read" }))],
-    queued: rows.length - outcomes.length,
+    failed: [...rejected, ...outcomes.filter((o) => !o.ok && !o.stopped).map((o) => ({ title: o.title, error: o.error ?? "Could not read" }))],
+    queued: rows.length - outcomes.filter((o) => !o.stopped).length,
   };
 }

@@ -226,3 +226,19 @@ describe("review fixes", () => {
     expect((await ben.rpc<{ title: string }>("nova_sources"))[0].title).toBe("Feed's own title");
   });
 });
+
+describe("corrections", () => {
+  test("a corrected item gets a new fingerprint, so copies of the correction merge", async () => {
+    const a = await feed("https://a.example/rss", "A");
+    const b = await feed("https://b.example/rss", "B");
+    for (const f of [a, b]) await ana.rpc("nova_follow", { p_feed: f });
+    await ingest(a, [{ guid: "1", title: "Draft", contentHash: "old-text", contentHtml: "<p>old</p>" }]);
+    await ingest(a, [{ guid: "1", title: "Corrected", contentHash: "new-text", contentHtml: "<p>new</p>" }]);
+    const { rows } = await pg.query<{ content_hash: string }>("select content_hash from public.items where feed_id = $1", [a]);
+    expect(rows[0].content_hash).toBe("new-text");
+    await ingest(b, [{ guid: "x", title: "Corrected", contentHash: "new-text" }]);
+    const latest = await ana.rpc<{ story_id: string; merged_by: string | null; feed_title: string }>("nova_latest");
+    expect(new Set(latest.map((l) => l.story_id)).size).toBe(1);
+    expect(latest.find((l) => l.feed_title === "B")?.merged_by).toBe("copy");
+  });
+});

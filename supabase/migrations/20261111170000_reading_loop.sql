@@ -218,11 +218,14 @@ begin
 
     select id into v_existing from public.items where feed_id = p_feed_id and guid = it ->> 'guid';
     if v_existing is not null then
+      -- A feed corrected an item: replace its text and its fingerprint together, so later
+      -- copies are compared with what is actually stored. Its story stays as it is.
       update public.items set
-        title = it ->> 'title', excerpt = it ->> 'excerpt', content_html = it ->> 'contentHtml',
+        title = it ->> 'title', excerpt = it ->> 'excerpt', content_html = it ->> 'contentHtml', content_hash = v_hash,
+        url = coalesce(it ->> 'url', url), link_key = coalesce(v_link, link_key),
         image_url = coalesce(it ->> 'imageUrl', image_url), author = coalesce(it ->> 'author', author)
-      where id = v_existing and (title, coalesce(excerpt, ''), coalesce(content_html, ''))
-        is distinct from (it ->> 'title', coalesce(it ->> 'excerpt', ''), coalesce(it ->> 'contentHtml', ''));
+      where id = v_existing and (title, coalesce(excerpt, ''), coalesce(content_html, ''), coalesce(content_hash, ''))
+        is distinct from (it ->> 'title', coalesce(it ->> 'excerpt', ''), coalesce(it ->> 'contentHtml', ''), coalesce(v_hash, ''));
       continue;
     end if;
 
