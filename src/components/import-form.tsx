@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, Upload } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useId } from "react";
 import { importFeeds, type ImportState } from "@/app/actions";
+import { MAX_OPML_BYTES, MAX_OPML_LABEL, OPML_TOO_LARGE } from "@/lib/limits";
 import { Body, Icon, Notice } from "./ui";
 
 export function ImportForm() {
@@ -16,8 +17,21 @@ export function ImportForm() {
         <div className="file-drop">
           <Icon icon={Upload} />
           <label htmlFor={id} className="t-label t-strong">OPML file</label>
-          <input id={id} name="opml" type="file" accept=".opml,.xml,text/xml,application/xml,text/x-opml" required />
-          <span className="t-meta">Up to 500 feeds, 2 MB</span>
+          <input
+            id={id}
+            name="opml"
+            type="file"
+            accept=".opml,.xml,text/xml,application/xml,text/x-opml"
+            required
+            onChange={(e) => {
+              // Stop an oversized file here, with a clear message, instead of uploading it.
+              const input = e.currentTarget;
+              const file = input.files?.[0];
+              input.setCustomValidity(file && file.size > MAX_OPML_BYTES ? OPML_TOO_LARGE : "");
+              input.reportValidity();
+            }}
+          />
+          <span className="t-meta">Up to 500 feeds, {MAX_OPML_LABEL}</span>
         </div>
         <div className="nv2-line" style={{ justifyContent: "flex-end" }}>
           <button type="submit" className="m-mat m-pigment" aria-busy={running || undefined}>

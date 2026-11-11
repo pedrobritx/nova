@@ -6,6 +6,7 @@ import { isUuid } from "@/lib/data";
 import { supabaseConfigured, supabaseForRequest } from "@/lib/db/supabase";
 import type { FoundFeed } from "@/lib/feeds/discover";
 import { findFeeds, follow, importOpml, type ImportResult } from "@/lib/library";
+import { MAX_OPML_BYTES, OPML_TOO_LARGE } from "@/lib/limits";
 import { refreshDue } from "@/lib/refresh";
 import { context } from "@/lib/server";
 
@@ -67,7 +68,7 @@ export async function importFeeds(_prev: ImportState, formData: FormData): Promi
   const { db, service } = await context();
   const file = formData.get("opml");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an OPML file first" };
-  if (file.size > 2 * 1024 * 1024) return { error: "The file is larger than 2 MB. Is it really an OPML export?" };
+  if (file.size > MAX_OPML_BYTES) return { error: OPML_TOO_LARGE };
   try {
     const result = await importOpml(db, service, await file.text());
     refresh();
