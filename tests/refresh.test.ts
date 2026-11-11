@@ -55,3 +55,19 @@ test("a refresh stores new items, honours ETags and records failures", async () 
   expect(await refreshFeed(service, await feedRow())).toMatchObject({ ok: false, error: "Nova only reads public websites" });
   expect((await user.rpc("nova_latest")).length).toBe(2);
 });
+
+test("ingestion retries when Postgres breaks a deadlock, and only then", async () => {
+  const { retryOnConflict } = await import("@/lib/refresh");
+  let calls = 0;
+  const flaky = async () => {
+    calls++;
+    if (calls < 3) throw Object.assign(new Error("deadlock detected"), { code: "40P01" });
+    return "stored";
+  };
+  await expect(retryOnConflict(flaky)).resolves.toBe("stored");
+  expect(calls).toBe(3);
+
+  let other = 0;
+  await expect(retryOnConflict(async () => { other++; throw Object.assign(new Error("permission denied"), { code: "42501" }); })).rejects.toThrow(/permission/);
+  expect(other).toBe(1);
+});

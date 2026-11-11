@@ -194,8 +194,23 @@ declare
   v_published timestamptz;
   v_link text;
   v_hash text;
+  v_key bigint;
   v_new integer := 0;
 begin
+  -- Serialise merges on the same link or text, so two feeds arriving together share one
+  -- story. Every lock the batch needs is taken up front, in one global order, so two
+  -- refreshes can never each hold a lock the other is waiting for.
+  for v_key in
+    select k from (
+      select hashtextextended(e ->> 'linkKey', 0) as k from jsonb_array_elements(p_items) e where nullif(e ->> 'linkKey', '') is not null
+      union
+      select hashtextextended(e ->> 'contentHash', 1) from jsonb_array_elements(p_items) e where nullif(e ->> 'contentHash', '') is not null
+    ) keys
+    order by k
+  loop
+    perform pg_advisory_xact_lock(v_key);
+  end loop;
+
   for it in select * from jsonb_array_elements(p_items) loop
     v_published := (it ->> 'publishedAt')::timestamptz;
     v_link := nullif(it ->> 'linkKey', '');
@@ -210,10 +225,6 @@ begin
         is distinct from (it ->> 'title', coalesce(it ->> 'excerpt', ''), coalesce(it ->> 'contentHtml', ''));
       continue;
     end if;
-
-    -- Serialise merges on the same link or text so two feeds arriving together share one story.
-    perform pg_advisory_xact_lock(hashtextextended(coalesce(v_link, ''), 0));
-    perform pg_advisory_xact_lock(hashtextextended(coalesce(v_hash, ''), 1));
 
     v_story := null; v_by := null;
     if v_link is not null then

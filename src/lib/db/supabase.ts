@@ -19,7 +19,7 @@ function asDb(client: SupabaseClient): Db {
   return {
     async rpc<T>(fn: string, args: RpcArgs = {}): Promise<T[]> {
       const { data, error } = await client.rpc(fn, args);
-      if (error) throw new Error(`${fn}: ${error.message}`);
+      if (error) throw Object.assign(new Error(`${fn}: ${error.message}`), { code: error.code });
       if (Array.isArray(data)) return data as T[];
       return [{ [fn]: data } as T];
     },

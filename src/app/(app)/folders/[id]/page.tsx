@@ -13,16 +13,23 @@ import { timeZone } from "@/lib/tz";
 export default function FolderPage(props: PageProps<"/folders/[id]">) {
   return (
     <Suspense fallback={<Skeleton kind="list" />}>
-      <FolderView params={props.params} />
+      <FolderView params={props.params} searchParams={props.searchParams} />
     </Suspense>
   );
 }
 
-async function FolderView({ params }: { params: PageProps<"/folders/[id]">["params"] }) {
-  const { id } = await params;
+async function FolderView({ params, searchParams }: { params: PageProps<"/folders/[id]">["params"]; searchParams: PageProps<"/folders/[id]">["searchParams"] }) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   if (!isUuid(id)) notFound();
+  const before = typeof query.before === "string" && !Number.isNaN(Date.parse(query.before)) ? query.before : null;
+  const beforeId = typeof query.after === "string" && isUuid(query.after) ? query.after : null;
   const { db } = await context();
-  const [{ folders }, stories, items, tz] = await Promise.all([getFolders(db), getToday(db, id), getLatest(db, { folderId: id }), timeZone()]);
+  const [{ folders }, stories, items, tz] = await Promise.all([
+    getFolders(db),
+    before ? Promise.resolve([]) : getToday(db, id),
+    getLatest(db, { folderId: id, before, beforeId }),
+    timeZone(),
+  ]);
   const folder = folders.find((f) => f.id === id);
   if (!folder) notFound();
   const merged = stories.filter((s) => s.sourceCount > 1).slice(0, 3);
@@ -48,7 +55,12 @@ async function FolderView({ params }: { params: PageProps<"/folders/[id]">["para
           </div>
         </section>
       )}
-      <ItemList items={items} olderHref={null} showFolder={false} tz={tz} />
+      <ItemList
+        items={items}
+        olderHref={items.length === 60 ? `/folders/${id}?${new URLSearchParams({ before: items.at(-1)!.publishedAt, after: items.at(-1)!.id })}` : null}
+        showFolder={false}
+        tz={tz}
+      />
     </>
   );
 }

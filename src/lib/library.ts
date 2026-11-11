@@ -5,7 +5,7 @@ import { assertPublicAddress, FetchRefused, safeFetch } from "./feeds/net";
 import { readOpml } from "./feeds/opml";
 import { NotAFeed, parseFeedText } from "./feeds/parse";
 import { normaliseInputUrl } from "./feeds/url";
-import { pool, refreshFeed, toIngestPayload } from "./refresh";
+import { pool, refreshFeed, retryOnConflict, toIngestPayload } from "./refresh";
 
 export type Found = { ok: true; feeds: FoundFeed[] } | { ok: false; error: string };
 
@@ -37,7 +37,7 @@ export async function follow(user: Db, service: Db, feedUrl: string, folder: str
     const parsed = parseFeedText(res.text, res.url);
     const feedId = await registerFeed(service, res.url, parsed.title, parsed.siteUrl, parsed.format);
     await user.rpc("nova_follow", { p_feed: feedId, p_folder_name: folder });
-    await service.rpc("nova_ingest_items", { p_feed_id: feedId, p_items: toIngestPayload(parsed) });
+    await retryOnConflict(() => service.rpc("nova_ingest_items", { p_feed_id: feedId, p_items: toIngestPayload(parsed) }));
     await service.rpc("nova_feed_fetched", {
       p_feed_id: feedId, p_ok: true, p_error: null, p_etag: res.etag, p_last_modified: res.lastModified,
       p_title: parsed.title, p_site_url: parsed.siteUrl, p_retry_after_seconds: res.retryAfter,

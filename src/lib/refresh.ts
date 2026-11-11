@@ -7,6 +7,23 @@ export type FeedRow = { id: string; url: string; etag: string | null; last_modif
 
 export type FeedOutcome = { feedId: string; ok: boolean; newItems: number; error?: string };
 
+/**
+ * Run a database write again when Postgres aborted it to break a deadlock or a serialisation
+ * conflict with another refresh. Merges lock story rows, and two feeds can reach the same
+ * stories in opposite orders; the second attempt finds them free.
+ */
+export async function retryOnConflict<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (attempt >= attempts || (code !== "40P01" && code !== "40001")) throw err;
+      await new Promise((r) => setTimeout(r, 50 * attempt + Math.random() * 100));
+    }
+  }
+}
+
 /** Items as nova_ingest_items expects them. */
 export function toIngestPayload(feed: ParsedFeed) {
   return feed.items.map((i) => ({
@@ -41,7 +58,7 @@ export async function refreshFeed(service: Db, feed: FeedRow, fetchOptions: Fetc
       return { feedId: feed.id, ok: false, newItems: 0, error };
     }
     const parsed = parseFeedText(res.text, res.url);
-    const [row] = await service.rpc<{ nova_ingest_items: number }>("nova_ingest_items", { p_feed_id: feed.id, p_items: toIngestPayload(parsed) });
+    const [row] = await retryOnConflict(() => service.rpc<{ nova_ingest_items: number }>("nova_ingest_items", { p_feed_id: feed.id, p_items: toIngestPayload(parsed) }));
     await recordFetch(service, feed.id, { ok: true, etag: res.etag, lastModified: res.lastModified, title: parsed.title, siteUrl: parsed.siteUrl, retryAfter: res.retryAfter });
     return { feedId: feed.id, ok: true, newItems: row?.nova_ingest_items ?? 0 };
   } catch (err) {
