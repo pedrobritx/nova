@@ -71,18 +71,28 @@ export function sanitizeContent(html: string | null | undefined, base: string | 
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", hellip: "…", mdash: "—", ndash: "–", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" };
 
+function codePoint(n: number): string {
+  // Feed text is untrusted: a reference outside Unicode, to a surrogate or to NUL becomes
+  // the replacement character instead of throwing and failing the whole feed.
+  return n > 0 && n <= 0x10ffff && (n < 0xd800 || n > 0xdfff) ? String.fromCodePoint(n) : "\uFFFD";
+}
+
+/** Decodes character references in one pass, so "&amp;#60;" stays "&#60;". Never throws. */
+export function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, ref: string) => {
+    if (ref[0] !== "#") return ENTITIES[ref.toLowerCase()] ?? m;
+    return codePoint(ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : Number(ref.slice(1)));
+  });
+}
+
 /** Plain text from HTML: tags removed, entities decoded, whitespace collapsed. */
 export function plainText(html: string | null | undefined): string {
   if (!html) return "";
-  return html
+  const stripped = html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
     .replace(/<br\s*\/?>|<\/(p|div|li|h\d|blockquote)>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
-    .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[name.toLowerCase()] ?? m)
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/<[^>]+>/g, " ");
+  return decodeEntities(stripped).replace(/\s+/g, " ").trim();
 }
 
 /** A short plain-text excerpt that ends on a word. */
@@ -94,9 +104,13 @@ export function excerpt(html: string | null | undefined, max = 280): string | nu
   return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 40)).replace(/[\s,.;:–—-]+$/, "")}…`;
 }
 
-/** The first image in sanitised HTML, used when a feed gives no image of its own. */
+/**
+ * The first image in sanitised HTML, used when a feed gives no image of its own. The
+ * attribute is HTML-encoded ("&amp;" for "&"), so it is decoded back to the address itself.
+ */
 export function firstImage(html: string | null): string | null {
-  return html?.match(/<img[^>]+src="([^"]+)"/i)?.[1] ?? null;
+  const src = html?.match(/<img[^>]+src="([^"]+)"/i)?.[1];
+  return src ? cleanUrl(decodeEntities(src)) : null;
 }
 
 /**

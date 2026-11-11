@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { contentHash, excerpt, plainText, sanitizeContent } from "@/lib/feeds/content";
+import { contentHash, excerpt, firstImage, plainText, sanitizeContent } from "@/lib/feeds/content";
 import { feedLinksInHtml } from "@/lib/feeds/discover";
 import { readOpml, writeOpml } from "@/lib/feeds/opml";
 import { looksLikeFeed, NotAFeed, parseFeedText } from "@/lib/feeds/parse";
@@ -48,6 +48,17 @@ describe("content", () => {
     const e = excerpt(`<p>${"word ".repeat(100)}</p>`, 50)!;
     expect(e.endsWith("…")).toBe(true);
     expect(e.length).toBeLessThanOrEqual(51);
+  });
+
+  test("malformed character references never throw", () => {
+    expect(plainText("A &#99999999; B &#x110000; C &#xD800; D &#0; E")).toBe("A \uFFFD B \uFFFD C \uFFFD D \uFFFD E");
+    expect(plainText("&amp;#60; stays escaped once")).toBe("&#60; stays escaped once");
+  });
+
+  test("the fallback image is the decoded address, not the HTML-encoded one", () => {
+    const html = sanitizeContent('<p>Photo</p><img src="https://cdn.example/i.jpg?w=600&signature=abc" alt="">', null)!;
+    expect(html).toContain("w=600&amp;signature=abc");
+    expect(firstImage(html)).toBe("https://cdn.example/i.jpg?w=600&signature=abc");
   });
 
   test("fingerprints ignore markup but need enough text", () => {
@@ -117,6 +128,20 @@ describe("parsing", () => {
     const feed = parseFeedText(json, "https://kw.example/feed.json", now);
     expect(feed.format).toBe("json");
     expect(feed.items[0]).toMatchObject({ guid: "kw-7", title: "Tessera 3.0", contentHtml: "<p>Plain &amp; simple</p>", author: "KW" });
+  });
+
+  test("one malformed item does not stop the rest of the feed", () => {
+    const json = JSON.stringify({
+      version: "https://jsonfeed.org/version/1.1", title: "Kernel Weekly", home_page_url: "https://kw.example/",
+      items: [
+        { id: "bad", url: "https://kw.example/bad", title: "Broken &#99999999; headline", content_html: "<p>Text</p>" },
+        { id: "ok", url: "https://kw.example/ok", title: "Fine headline", content_html: '<img src="https://kw.example/a.jpg?w=1&amp;h=2">' },
+      ],
+    });
+    const feed = parseFeedText(json, "https://kw.example/feed.json", now);
+    expect(feed.items.map((i) => i.guid)).toEqual(["bad", "ok"]);
+    expect(feed.items[0].title).toBe("Broken \uFFFD headline");
+    expect(feed.items[1].imageUrl).toBe("https://kw.example/a.jpg?w=1&h=2");
   });
 
   test("RSS 1.0 (RDF)", () => {

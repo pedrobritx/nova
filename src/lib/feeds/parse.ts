@@ -178,7 +178,13 @@ export function parseFeedText(body: string, feedUrl: string, fetchedAt = new Dat
   const seen = new Set<string>();
   const items: ParsedItem[] = [];
   for (const [position, d] of drafts.slice(0, 200).entries()) {
-    const item = finish(d, feedUrl, fetchedAt, position);
+    let item: ParsedItem | null;
+    try {
+      item = finish(d, feedUrl, fetchedAt, position);
+    } catch {
+      // One malformed item is skipped; it must not stop the rest of the feed from updating.
+      continue;
+    }
     if (item && !seen.has(item.guid)) {
       seen.add(item.guid);
       items.push(item);
