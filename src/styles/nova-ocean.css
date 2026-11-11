@@ -1,0 +1,185 @@
+/* Nova layer on Meridian 1.0 (Ocean). Load after Meridian's meridian.css and components.css.
+   Rules: spacing only from --s1…--s8 and --gap; radii only from --r-*; type only from the .t-* scale.
+   Stacks never shrink their children, so nothing collapses inside a fixed-height scroller. */
+@layer nova {
+  :where(.nv2) { font-family: var(--font-ui); color: var(--ink); background: var(--g0); font-size: 15px; line-height: 22px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  :where(.nv2) *, :where(.nv2) *::before, :where(.nv2) *::after { box-sizing: border-box; }
+  :where(.nv2) :where(h1, h2, h3, h4, p, ul, ol, figure, blockquote, dl, dd) { margin: 0; }
+  :where(.nv2) :where(ul, ol) { padding: 0; list-style: none; }
+  :where(.nv2) a:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-row); }
+  .nv2 a.m-mat { text-decoration: none; }
+  .nv2-sr { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .nv2 svg.i { width: 20px; height: 20px; flex: none; }
+  .nv2 svg.i-16 { width: 16px; height: 16px; flex: none; }
+
+  /* ---------- Layout primitives ---------- */
+  .nv2-stack { display: flex; flex-direction: column; min-width: 0; }
+  .nv2-stack > * { flex: none; min-width: 0; }
+  .nv2-line { display: flex; align-items: center; min-width: 0; }
+  .nv2-line > * { flex: none; }
+  .nv2-line > .nv2-fill { flex: 1 1 auto; min-width: 0; }
+  .nv2-wrap { display: flex; flex-wrap: wrap; align-items: center; }
+  .nv2-grid { display: grid; grid-auto-rows: max-content; }
+  .nv2-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 1023px) { .nv2-wide-only { display: none !important; } }
+  @media (min-width: 1024px) { .nv2-narrow-only { display: none !important; } }
+  @media (min-width: 1024px) { .nv2-sticky { position: sticky; top: calc(var(--target) + var(--s6) + var(--s2)); } }
+
+  /* ---------- Type scale ---------- */
+  .t-cap { font-size: 12px; line-height: 16px; font-weight: 650; }
+  .t-meta { font-size: 13px; line-height: 18px; color: var(--muted); }
+  .t-label { font-size: 14px; line-height: 20px; }
+  .t-body { font-size: 15px; line-height: 22px; }
+  .t-lead { font-size: 17px; line-height: 26px; }
+  .t-eyebrow { font-size: 13px; line-height: 18px; font-weight: 650; color: var(--accent-ink); }
+  .t-kicker { font-size: 12px; line-height: 16px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .t-section { font-family: var(--font-display); font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -.01em; }
+  .t-page { font-family: var(--font-display); font-size: 44px; line-height: 52px; font-weight: 700; letter-spacing: -.02em; }
+  .t-page-s { font-family: var(--font-display); font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -.02em; }
+  .t-hl-row { font-family: var(--font-read); font-size: 17px; line-height: 23px; font-weight: 600; letter-spacing: -.005em; text-wrap: pretty; }
+  .t-hl-card { font-family: var(--font-read); font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -.01em; text-wrap: pretty; }
+  .t-hl-story { font-family: var(--font-read); font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+  .t-hl-lead { font-family: var(--font-read); font-size: 34px; line-height: 40px; font-weight: 600; letter-spacing: -.015em; text-wrap: balance; }
+  .t-hl-page { font-family: var(--font-read); font-size: 44px; line-height: 52px; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+  .t-dek { font-family: var(--font-read); font-style: italic; font-size: 20px; line-height: 30px; color: var(--muted); }
+  .t-read { font-family: var(--font-read); font-size: 20px; line-height: 32px; }
+  .t-read > p + p { margin-top: var(--s5); }
+  .t-strong { font-weight: 650; }
+  .t-muted { color: var(--muted); }
+  .t-accent { color: var(--accent-ink); }
+
+  /* ---------- Ground: Ocean light from above, caustics and four soft pools ---------- */
+  .nv2-ground {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      url(/ground/ocean-caustics-dawn.webp) center top / 1440px auto repeat-y,
+      radial-gradient(22% 15% at 26% 33%, rgb(255 255 255 / .34), transparent 100%),
+      radial-gradient(20% 13% at 64% 15%, rgb(200 238 246 / .34), transparent 100%),
+      radial-gradient(23% 16% at 75% 64%, rgb(255 255 255 / .34), transparent 100%),
+      radial-gradient(19% 14% at 29% 76%, rgb(200 238 246 / .34), transparent 100%),
+      radial-gradient(120% 60% at 50% 0%, var(--g2), transparent 64%),
+      linear-gradient(172deg, var(--g0), var(--g1));
+  }
+  [data-appearance="dusk"] .nv2-ground {
+    background:
+      url(/ground/ocean-caustics-dusk.webp) center top / 1440px auto repeat-y,
+      radial-gradient(22% 15% at 26% 33%, rgb(120 200 235 / .09), transparent 100%),
+      radial-gradient(20% 13% at 64% 15%, rgb(80 150 205 / .09), transparent 100%),
+      radial-gradient(23% 16% at 75% 64%, rgb(120 200 235 / .09), transparent 100%),
+      radial-gradient(19% 14% at 29% 76%, rgb(80 150 205 / .09), transparent 100%),
+      radial-gradient(120% 60% at 50% 0%, var(--g2), transparent 64%),
+      linear-gradient(172deg, var(--g0), var(--g1));
+  }
+  [data-texture="off"] .nv2-ground { background: radial-gradient(120% 60% at 50% 0%, var(--g2), transparent 64%), linear-gradient(172deg, var(--g0), var(--g1)); }
+  .nv2-above { position: relative; z-index: 1; }
+
+  /* ---------- Glass chrome: guarded so text always reads ---------- */
+  .nv2-glass {
+    position: relative;
+    background: linear-gradient(var(--light-deg), rgb(var(--light-rgb) / calc(var(--sheen) * .22)), transparent 42%), rgb(var(--glass-rgb) / var(--guard));
+    -webkit-backdrop-filter: blur(var(--frost)) saturate(1.6); backdrop-filter: blur(var(--frost)) saturate(1.6);
+    box-shadow: inset 0 0 0 .5px var(--hair), inset 0 1px 0 rgb(var(--light-rgb) / calc(var(--rim) + .1)), 0 14px 36px -14px rgb(var(--shadow-rgb) / .3), 0 1px 3px rgb(var(--shadow-rgb) / .08);
+  }
+  .nv2-pop {
+    position: absolute; z-index: 30; width: 248px; padding: var(--s2); border-radius: var(--r-tile);
+    background: rgb(var(--glass-rgb) / max(var(--glass-a), .92));
+    -webkit-backdrop-filter: blur(var(--frost)) saturate(1.6); backdrop-filter: blur(var(--frost)) saturate(1.6);
+    box-shadow: inset 0 0 0 .5px var(--hair), 0 16px 40px -12px rgb(var(--shadow-rgb) / .4), 0 2px 6px rgb(var(--shadow-rgb) / .12);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .nv2-glass, .nv2-pop { background: rgb(var(--glass-rgb)); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset 0 0 0 1px var(--line); }
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .nv2-glass, .nv2-pop { background: rgb(var(--glass-rgb)); box-shadow: inset 0 0 0 1px var(--line); }
+  }
+
+  /* ---------- Content: opaque tiles on the ground ---------- */
+  .nv2-tile {
+    position: relative; display: flex; flex-direction: column; min-width: 0; min-height: min-content; flex-shrink: 0; overflow: hidden;
+    background: var(--surface); color: var(--ink); text-decoration: none; border-radius: var(--r-tile);
+    box-shadow: inset 0 0 0 .5px var(--hair), 0 1px 2px rgb(var(--shadow-rgb) / .06), 0 12px 30px -16px rgb(var(--shadow-rgb) / .26);
+    transition: transform var(--dur-quick) var(--ease-calm), box-shadow var(--dur-quick) var(--ease-calm);
+  }
+  .nv2-tile > * { flex: none; min-width: 0; }
+  .nv2-tile > .nv2-fill { flex: 1 1 auto; }
+  a.nv2-tile:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 .5px var(--hair), 0 2px 4px rgb(var(--shadow-rgb) / .08), 0 18px 40px -16px rgb(var(--shadow-rgb) / .32); }
+  a.nv2-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-tile); }
+  .nv2-well { background: var(--surface-2); border-radius: var(--r-field); }
+  .nv2-art { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+  .nv2-art > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .nv2-thumb { position: relative; display: block; flex: none; width: 80px; height: 80px; overflow: hidden; border-radius: var(--r-row); background: var(--surface-2); }
+  .nv2-thumb > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---------- Navigation ---------- */
+  .nv2-nav {
+    display: flex; align-items: center; gap: var(--s3); min-height: var(--target); padding: 0 var(--s3); border-radius: var(--r-field);
+    color: var(--ink); text-decoration: none; font-size: 14px; line-height: 20px; font-weight: 500; transition: background-color var(--dur-quick) var(--ease-calm);
+  }
+  .nv2-nav > svg { width: 20px; height: 20px; flex: none; color: var(--muted); }
+  .nv2-nav > .nv2-nav-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nv2-nav > :last-child:not(.nv2-nav-label):not(svg) { flex: none; }
+  .nv2-nav:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .nv2-nav[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); font-weight: 650; }
+  .nv2-nav[aria-current="page"] > svg { color: var(--accent-ink); }
+  .nv2-count { font-size: 12px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .nv2-group-label { padding: 0 var(--s3); font-size: 12px; line-height: 16px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+
+  .nv2-tabbar { display: flex; gap: var(--s1); padding: var(--s2); border-radius: var(--r-window); }
+  .nv2-tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1); flex: 1 1 0; min-width: 0;
+    min-height: 56px; border-radius: var(--r-tile); color: var(--muted); text-decoration: none; font-size: 12px; line-height: 16px; font-weight: 600;
+  }
+  .nv2-tab > svg { width: 22px; height: 22px; }
+  .nv2-tab[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); }
+
+  /* ---------- Small parts ---------- */
+  .nv2-mono {
+    display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 999px;
+    background: var(--surface-2); color: var(--muted); font-size: 11px; line-height: 1; font-weight: 700; letter-spacing: .01em;
+  }
+  .nv2-mono--l { width: 40px; height: 40px; font-size: 13px; }
+  .nv2-well .nv2-mono { background: var(--surface); }
+  .nv2-stack-mono { display: inline-flex; align-items: center; gap: var(--s1); flex: none; }
+  .nv2-badge { display: inline-flex; align-items: center; gap: var(--s1); flex: none; min-height: 24px; padding: 0 var(--s2); border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 650; white-space: nowrap; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--muted); }
+  .nv2-badge--accent { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); }
+  .nv2-badge > svg { width: 14px; height: 14px; flex: none; }
+  .nv2-points { display: flex; flex-direction: column; gap: var(--s2); }
+  .nv2-points > li { position: relative; padding-left: var(--s5); }
+  .nv2-points > li::before { content: ""; position: absolute; left: var(--s1); top: calc(.5lh - 3.5px); width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+  .nv2-divider { height: 1px; border: 0; margin: 0; background: var(--hair); flex: none; }
+  .nv2-row { display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding: var(--s3); border-radius: var(--r-row); color: var(--ink); text-decoration: none; }
+  .nv2-row > * { flex: none; }
+  .nv2-row > .nv2-fill { flex: 1 1 auto; min-width: 0; }
+  a.nv2-row:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+  .nv2-chip {
+    display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: var(--target); padding: 0 var(--s4); border: 0; margin: 0; border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); font: inherit; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; cursor: pointer;
+    box-shadow: inset 0 0 0 .5px var(--hair); transition: background-color var(--dur-quick) var(--ease-calm);
+  }
+  .nv2-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .nv2-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .nv2-chip > svg { width: 16px; height: 16px; color: var(--accent-ink); }
+  .nv2-link { color: var(--accent-ink); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  .nv2-mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .nv2-dot { width: 8px; height: 8px; flex: none; border-radius: 999px; background: var(--accent); }
+
+  /* Meridian controls inside Nova */
+  .nv2 .m-glass[aria-pressed="true"] { color: var(--on-accent); }
+  .nv2 .m-glass[aria-pressed="true"] > .m-body > .m-refract { background: var(--accent); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .nv2 .m-seg:not(:has(.m-ind)) .m-seg-opt:has(input:checked) { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(var(--shadow-rgb) / .22), inset 0 0 0 .5px var(--hair); }
+  [data-appearance="dusk"] .nv2 .m-seg:not(:has(.m-ind)) .m-seg-opt:has(input:checked) { background: color-mix(in srgb, var(--ink) 18%, var(--surface)); }
+  .nv2 .m-seg-opt > span { display: inline-flex; align-items: center; gap: var(--s2); }
+  .nv2 .m-seg-opt svg { width: 16px; height: 16px; }
+  .nv2 .m-tab svg { width: 18px; height: 18px; }
+  .nv2 table { border-collapse: collapse; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nv2-tile, .nv2-nav, .nv2-chip { transition: none; }
+    a.nv2-tile:hover { transform: none; }
+  }
+  @media (forced-colors: active) {
+    .nv2-ground { background: Canvas; }
+    .nv2-glass, .nv2-tile, .nv2-pop { border: 1px solid CanvasText; }
+    .nv2-nav[aria-current="page"], .nv2-tab[aria-current="page"] { outline: 2px solid Highlight; }
+  }
+}
