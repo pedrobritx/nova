@@ -2,6 +2,7 @@ import { Folder } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MarkAllRead } from "@/components/actions-ui";
+import { FolderChips } from "@/components/folder-strip";
 import { ItemList } from "@/components/item-list";
 import { Skeleton } from "@/components/skeleton";
 import { StoryTile } from "@/components/stories";
@@ -47,6 +48,7 @@ async function FolderView({ params, searchParams }: { params: PageProps<"/folder
           <MarkAllRead folder={id} />
         </div>
       </header>
+      <FolderChips folders={folders} current={id} />
       {merged.length > 0 && (
         <section className="section" aria-labelledby="stories-h">
           <h2 id="stories-h" className="t-section">Stories</h2>

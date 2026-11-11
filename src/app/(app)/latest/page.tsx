@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { MarkAllRead, RefreshButton } from "@/components/actions-ui";
+import { FolderStrip } from "@/components/folder-strip";
 import { ItemList } from "@/components/item-list";
 import { Skeleton } from "@/components/skeleton";
 import { getLatest, isUuid } from "@/lib/data";
@@ -22,6 +23,9 @@ export default function LatestPage(props: PageProps<"/latest">) {
           <MarkAllRead />
         </div>
       </header>
+      <Suspense fallback={null}>
+        <FolderStrip />
+      </Suspense>
       <Suspense fallback={<Skeleton kind="list" />}>
         <LatestItems searchParams={props.searchParams} />
       </Suspense>

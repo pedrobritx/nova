@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { MarkAllRead, RefreshButton } from "@/components/actions-ui";
+import { FolderStrip } from "@/components/folder-strip";
 import { Skeleton } from "@/components/skeleton";
 import { LeadStory, StoryTile } from "@/components/stories";
 import { Empty, Icon, LinkButton } from "@/components/ui";
@@ -24,6 +25,9 @@ export default function TodayPage() {
           <MarkAllRead />
         </div>
       </header>
+      <Suspense fallback={null}>
+        <FolderStrip />
+      </Suspense>
       <Suspense fallback={<Skeleton kind="today" />}>
         <TodayStories />
       </Suspense>
