@@ -185,3 +185,44 @@ describe("organising sources", () => {
     expect(await ana.rpc("nova_sources")).toHaveLength(0);
   });
 });
+
+describe("review fixes", () => {
+  test("Latest pages through items that share a timestamp without skipping any", async () => {
+    const a = await feed("https://a.example/rss", "A");
+    await ana.rpc("nova_follow", { p_feed: a });
+    const t = hoursAgo(2);
+    await ingest(a, ["1", "2", "3", "4", "5"].map((g) => ({ guid: g, title: `Item ${g}`, publishedAt: t })));
+    const seen: string[] = [];
+    let cursor: { before: string | null; id: string | null } = { before: null, id: null };
+    for (let page = 0; page < 5; page++) {
+      const rows = await ana.rpc<{ item_id: string; published_at: Date }>("nova_latest", { p_limit: 2, p_before: cursor.before, p_before_id: cursor.id });
+      if (!rows.length) break;
+      seen.push(...rows.map((r) => r.item_id));
+      const last = rows.at(-1)!;
+      cursor = { before: new Date(last.published_at).toISOString(), id: last.item_id };
+    }
+    expect(new Set(seen).size).toBe(5);
+  });
+
+  test("a story's size counts only the sources you follow", async () => {
+    const a = await feed("https://a.example/rss", "A");
+    const b = await feed("https://b.example/rss", "B");
+    await ana.rpc("nova_follow", { p_feed: a });
+    await ben.rpc("nova_follow", { p_feed: a });
+    await ben.rpc("nova_follow", { p_feed: b });
+    await ingest(a, [{ guid: "1", title: "Shared", linkKey: "news.example/x" }]);
+    await ingest(b, [{ guid: "1", title: "Shared too", linkKey: "news.example/x" }]);
+    const [anaItem] = await ana.rpc<{ item_id: string; story_size: number }>("nova_latest");
+    expect(anaItem.story_size).toBe(1);
+    expect((await ana.rpc<{ story_size: number }>("nova_item", { p_item: anaItem.item_id }))[0].story_size).toBe(1);
+    expect((await ben.rpc<{ story_size: number }>("nova_latest")).map((r) => r.story_size)).toEqual([2, 2]);
+  });
+
+  test("your name for a source stays on your subscription", async () => {
+    const a = await feed("https://a.example/rss", "Feed's own title");
+    await ana.rpc("nova_follow", { p_feed: a, p_title: "My name for it" });
+    await ben.rpc("nova_follow", { p_feed: a });
+    expect((await ana.rpc<{ title: string }>("nova_sources"))[0].title).toBe("My name for it");
+    expect((await ben.rpc<{ title: string }>("nova_sources"))[0].title).toBe("Feed's own title");
+  });
+});

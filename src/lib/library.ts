@@ -1,7 +1,7 @@
 import "server-only";
 import type { Db } from "./db/types";
 import { discoverFeeds, type FoundFeed } from "./feeds/discover";
-import { FetchRefused, safeFetch } from "./feeds/net";
+import { assertPublicAddress, FetchRefused, safeFetch } from "./feeds/net";
 import { readOpml } from "./feeds/opml";
 import { NotAFeed, parseFeedText } from "./feeds/parse";
 import { normaliseInputUrl } from "./feeds/url";
@@ -52,25 +52,38 @@ export async function follow(user: Db, service: Db, feedUrl: string, folder: str
 export type ImportResult = { added: number; folders: string[]; fetched: number; failed: { title: string; error: string }[]; queued: number };
 
 /**
- * Import an OPML file: every feed is registered and followed at once (folders included), the
- * first ones are fetched straight away, and the scheduled refresh picks up the rest.
+ * Import an OPML file. Each address is checked first (public, resolvable); only then is it
+ * registered, and only by its URL: the names in the file belong to the person importing, so
+ * they go on their own subscription, never on the shared feed. The first feeds are fetched
+ * straight away and the scheduled refresh picks up the rest.
  */
 export async function importOpml(user: Db, service: Db, xml: string, budgetMs = 25_000): Promise<ImportResult> {
   const { sources } = readOpml(xml);
   if (!sources.length) throw new Error("The file has no feeds in it");
   if (sources.length > 500) throw new Error("Nova imports up to 500 feeds at a time");
+
+  const checked = await pool(sources, 16, Number.POSITIVE_INFINITY, async (s) => {
+    try {
+      await assertPublicAddress(s.url);
+      return { source: s, error: null };
+    } catch (err) {
+      return { source: s, error: err instanceof FetchRefused ? err.message : "Not a web address" };
+    }
+  });
+  const rejected = checked.filter((c) => c.error).map((c) => ({ title: c.source.title ?? c.source.url, error: c.error! }));
+
   const rows: { id: string; url: string; title: string }[] = [];
-  for (const s of sources) {
-    const id = await registerFeed(service, s.url, s.title, s.siteUrl, null);
-    await user.rpc("nova_follow", { p_feed: id, p_folder_name: s.folder });
+  for (const { source: s } of checked.filter((c) => !c.error)) {
+    const id = await registerFeed(service, s.url, null, null, null);
+    await user.rpc("nova_follow", { p_feed: id, p_folder_name: s.folder, p_title: s.title });
     rows.push({ id, url: s.url, title: s.title ?? s.url });
   }
   const outcomes = await pool(rows, 6, Date.now() + budgetMs, async (r) => ({ ...(await refreshFeed(service, { id: r.id, url: r.url, etag: null, last_modified: null })), title: r.title }));
   return {
     added: rows.length,
-    folders: [...new Set(sources.map((s) => s.folder).filter((f): f is string => !!f))],
+    folders: [...new Set(checked.filter((c) => !c.error).map((c) => c.source.folder).filter((f): f is string => !!f))],
     fetched: outcomes.filter((o) => o.ok).length,
-    failed: outcomes.filter((o) => !o.ok).map((o) => ({ title: o.title, error: o.error ?? "Could not read" })),
+    failed: [...rejected, ...outcomes.filter((o) => !o.ok).map((o) => ({ title: o.title, error: o.error ?? "Could not read" }))],
     queued: rows.length - outcomes.length,
   };
 }

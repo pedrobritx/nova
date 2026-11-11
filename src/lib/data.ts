@@ -100,9 +100,9 @@ function item(r: R): ItemRow {
   };
 }
 
-export async function getLatest(db: Db, opts: { before?: string | null; folderId?: string | null; feedId?: string | null; unreadOnly?: boolean } = {}): Promise<ItemRow[]> {
+export async function getLatest(db: Db, opts: { before?: string | null; beforeId?: string | null; folderId?: string | null; feedId?: string | null; unreadOnly?: boolean } = {}): Promise<ItemRow[]> {
   const rows = await db.rpc<R>("nova_latest", {
-    p_limit: 60, p_before: opts.before ?? null, p_folder: opts.folderId ?? null, p_feed: opts.feedId ?? null, p_unread_only: opts.unreadOnly ?? false,
+    p_limit: 60, p_before: opts.before ?? null, p_before_id: opts.beforeId ?? null, p_folder: opts.folderId ?? null, p_feed: opts.feedId ?? null, p_unread_only: opts.unreadOnly ?? false,
   });
   return rows.map(item);
 }

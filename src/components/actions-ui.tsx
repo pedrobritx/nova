@@ -48,8 +48,12 @@ export function MarkReadOnOpen({ itemId, already }: { itemId: string; already: b
   const done = useRef(already);
   useEffect(() => {
     if (done.current) return;
-    done.current = true;
-    const timer = setTimeout(() => void markRead([itemId]), 1200);
+    // The guard is set when the timer fires, not when it is scheduled: React may run this
+    // effect, clean it up and run it again, and the second run must still schedule it.
+    const timer = setTimeout(() => {
+      done.current = true;
+      void markRead([itemId]);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [itemId]);
   return null;

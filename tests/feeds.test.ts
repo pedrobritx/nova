@@ -86,7 +86,14 @@ describe("parsing", () => {
     expect(first.contentHtml).not.toContain("bad()");
     expect(first.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(second.guid).toBe("https://typeandgrid.example/future");
-    expect(second.publishedAt).toBe(now.toISOString());
+    expect(second.publishedAt).toBe(new Date(now.getTime() - 1).toISOString());
+  });
+
+  test("undated items keep the feed's order", () => {
+    const rss = `<rss version="2.0"><channel><title>T</title>${["a", "b", "c"].map((g) => `<item><title>${g}</title><guid>${g}</guid></item>`).join("")}</channel></rss>`;
+    const times = parseFeedText(rss, "https://ex.com/rss", now).items.map((i) => Date.parse(i.publishedAt));
+    expect(times[0]).toBeGreaterThan(times[1]);
+    expect(times[1]).toBeGreaterThan(times[2]);
   });
 
   test("Atom with alternate links and HTML content", () => {

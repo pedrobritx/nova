@@ -128,14 +128,15 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-function finish(d: Draft, feedUrl: string, fetchedAt: Date): ParsedItem | null {
+function finish(d: Draft, feedUrl: string, fetchedAt: Date, position: number): ParsedItem | null {
   const base = d.url ?? feedUrl;
   const contentHtml = sanitizeContent(d.contentHtml ?? d.summaryHtml, base);
   const summary = d.summaryHtml && d.contentHtml ? sanitizeContent(d.summaryHtml, base) : null;
   const title = d.title ? (excerpt(d.title, 300) ?? "") : excerpt(contentHtml, 90) ?? "";
   if (!title && !d.url) return null;
   // Dates in the future are publishing mistakes; they would pin an item to the top for days.
-  const published = d.publishedAt && Date.parse(d.publishedAt) <= fetchedAt.getTime() + 60_000 ? d.publishedAt : fetchedAt.toISOString();
+  // Undated items take the fetch time, a millisecond apart, so they keep the feed's order.
+  const published = d.publishedAt && Date.parse(d.publishedAt) <= fetchedAt.getTime() + 60_000 ? d.publishedAt : new Date(fetchedAt.getTime() - position).toISOString();
   const guid = d.guid ?? d.url ?? createHash("sha256").update(`${title}|${d.publishedAt ?? ""}`).digest("hex");
   return {
     guid: guid.slice(0, 1000),
@@ -176,8 +177,8 @@ export function parseFeedText(body: string, feedUrl: string, fetchedAt = new Dat
   }
   const seen = new Set<string>();
   const items: ParsedItem[] = [];
-  for (const d of drafts.slice(0, 200)) {
-    const item = finish(d, feedUrl, fetchedAt);
+  for (const [position, d] of drafts.slice(0, 200).entries()) {
+    const item = finish(d, feedUrl, fetchedAt, position);
     if (item && !seen.has(item.guid)) {
       seen.add(item.guid);
       items.push(item);

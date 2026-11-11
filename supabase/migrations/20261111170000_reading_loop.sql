@@ -258,6 +258,15 @@ grant execute on function public.nova_upsert_feed, public.nova_claim_due_feeds, 
 
 -- ---------------------------------------------------------------- Reading (as the signed-in person)
 
+-- How many of your own sources covered a story. Stories are shared, so their stored item
+-- count includes feeds you do not follow; this counts only what you can see.
+create function public.nova_story_sources(p_story uuid)
+returns integer language sql stable security invoker set search_path = '' as $$
+  select greatest(count(distinct i.feed_id), 1)::integer from public.items i
+  join public.subscriptions s on s.feed_id = i.feed_id and s.user_id = (select auth.uid())
+  where i.story_id = p_story;
+$$;
+
 -- Today: stories from the last two days, the ones covered by the most of your sources first.
 create function public.nova_today(p_limit integer default 30, p_folder uuid default null)
 returns table (
@@ -296,26 +305,27 @@ returns table (
   limit p_limit;
 $$;
 
--- Latest: every item, newest first, with its story's size and your read state.
-create function public.nova_latest(p_limit integer default 60, p_before timestamptz default null, p_folder uuid default null, p_feed uuid default null, p_unread_only boolean default false)
+-- Latest: every item, newest first, with how many of your sources covered its story and your
+-- read state. Pages continue after (p_before, p_before_id), so items sharing a timestamp are
+-- never skipped.
+create function public.nova_latest(p_limit integer default 60, p_before timestamptz default null, p_before_id uuid default null, p_folder uuid default null, p_feed uuid default null, p_unread_only boolean default false)
 returns table (
   item_id uuid, story_id uuid, title text, url text, excerpt text, image_url text, published_at timestamptz,
   feed_id uuid, feed_title text, folder_name text, is_read boolean, story_size integer, merged_by text
 ) language sql stable security invoker set search_path = '' as $$
   select i.id, i.story_id, i.title, i.url, i.excerpt, i.image_url, i.published_at,
          i.feed_id, coalesce(s.title, f.title), fo.name, (st.item_id is not null),
-         coalesce(sto.item_count, 1), i.merged_by
+         public.nova_story_sources(i.story_id), i.merged_by
   from public.items i
   join public.subscriptions s on s.feed_id = i.feed_id and s.user_id = (select auth.uid())
   join public.feeds f on f.id = i.feed_id
   left join public.folders fo on fo.id = s.folder_id
-  left join public.stories sto on sto.id = i.story_id
   left join public.item_states st on st.item_id = i.id and st.user_id = (select auth.uid())
-  where (p_before is null or i.published_at < p_before)
+  where (p_before is null or (i.published_at, i.id) < (p_before, coalesce(p_before_id, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))
     and (p_folder is null or s.folder_id = p_folder)
     and (p_feed is null or i.feed_id = p_feed)
     and (not p_unread_only or st.item_id is null)
-  order by i.published_at desc
+  order by i.published_at desc, i.id desc
   limit p_limit;
 $$;
 
@@ -338,19 +348,18 @@ returns table (
   order by i.published_at;
 $$;
 
--- One item to read, with the size of its story.
+-- One item to read, with how many of your sources covered its story.
 create function public.nova_item(p_item uuid)
 returns table (
   item_id uuid, story_id uuid, title text, url text, author text, content_html text, excerpt text, image_url text,
   published_at timestamptz, feed_id uuid, feed_title text, site_url text, folder_name text, is_read boolean, story_size integer
 ) language sql stable security invoker set search_path = '' as $$
   select i.id, i.story_id, i.title, i.url, i.author, i.content_html, i.excerpt, i.image_url, i.published_at,
-         i.feed_id, coalesce(s.title, f.title), f.site_url, fo.name, (st.item_id is not null), coalesce(sto.item_count, 1)
+         i.feed_id, coalesce(s.title, f.title), f.site_url, fo.name, (st.item_id is not null), public.nova_story_sources(i.story_id)
   from public.items i
   join public.subscriptions s on s.feed_id = i.feed_id and s.user_id = (select auth.uid())
   join public.feeds f on f.id = i.feed_id
   left join public.folders fo on fo.id = s.folder_id
-  left join public.stories sto on sto.id = i.story_id
   left join public.item_states st on st.item_id = i.id and st.user_id = (select auth.uid())
   where i.id = p_item;
 $$;
@@ -398,8 +407,9 @@ $$;
 
 -- ---------------------------------------------------------------- Changing your library
 
--- Follow a feed (already registered by the fetcher), optionally into a folder by name.
-create function public.nova_follow(p_feed uuid, p_folder_name text default null)
+-- Follow a feed (already registered by the fetcher), optionally into a folder by name and
+-- under your own name for it (an OPML import keeps the names you gave your sources).
+create function public.nova_follow(p_feed uuid, p_folder_name text default null, p_title text default null)
 returns uuid language plpgsql security invoker set search_path = '' as $$
 declare v_folder uuid; v_sub uuid;
 begin
@@ -410,8 +420,10 @@ begin
     on conflict (user_id, name) do nothing;
     select id into v_folder from public.folders where user_id = (select auth.uid()) and name = btrim(p_folder_name);
   end if;
-  insert into public.subscriptions (feed_id, folder_id) values (p_feed, v_folder)
-  on conflict (user_id, feed_id) do update set folder_id = coalesce(excluded.folder_id, public.subscriptions.folder_id)
+  insert into public.subscriptions (feed_id, folder_id, title) values (p_feed, v_folder, left(nullif(btrim(p_title), ''), 120))
+  on conflict (user_id, feed_id) do update set
+    folder_id = coalesce(excluded.folder_id, public.subscriptions.folder_id),
+    title = coalesce(excluded.title, public.subscriptions.title)
   returning id into v_sub;
   return v_sub;
 end $$;
@@ -467,9 +479,9 @@ begin
     and not exists (select 1 from public.subscriptions s where s.folder_id = fo.id);
 end $$;
 
-revoke execute on function public.nova_today, public.nova_latest, public.nova_story, public.nova_item, public.nova_sources,
+revoke execute on function public.nova_story_sources, public.nova_today, public.nova_latest, public.nova_story, public.nova_item, public.nova_sources,
   public.nova_folders, public.nova_unread_total, public.nova_follow, public.nova_mark_read, public.nova_mark_unread,
   public.nova_mark_all_read, public.nova_unfollow, public.nova_move_source from public, anon;
-grant execute on function public.nova_today, public.nova_latest, public.nova_story, public.nova_item, public.nova_sources,
+grant execute on function public.nova_story_sources, public.nova_today, public.nova_latest, public.nova_story, public.nova_item, public.nova_sources,
   public.nova_folders, public.nova_unread_total, public.nova_follow, public.nova_mark_read, public.nova_mark_unread,
   public.nova_mark_all_read, public.nova_unfollow, public.nova_move_source to authenticated, service_role;

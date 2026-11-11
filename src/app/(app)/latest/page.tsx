@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { MarkAllRead, RefreshButton } from "@/components/actions-ui";
 import { ItemList } from "@/components/item-list";
 import { Skeleton } from "@/components/skeleton";
-import { getLatest } from "@/lib/data";
+import { getLatest, isUuid } from "@/lib/data";
 import { context } from "@/lib/server";
 import { timeZone } from "@/lib/tz";
 
@@ -33,9 +33,11 @@ async function LatestItems({ searchParams }: { searchParams: PageProps<"/latest"
   const params = await searchParams;
   const unreadOnly = params.show === "unread";
   const before = typeof params.before === "string" && !Number.isNaN(Date.parse(params.before)) ? params.before : null;
+  const beforeId = typeof params.after === "string" && isUuid(params.after) ? params.after : null;
   const { db } = await context();
-  const [items, tz] = await Promise.all([getLatest(db, { before, unreadOnly }), timeZone()]);
-  const older = items.length === 60 ? `/latest?${new URLSearchParams({ ...(unreadOnly ? { show: "unread" } : {}), before: items.at(-1)!.publishedAt })}` : null;
+  const [items, tz] = await Promise.all([getLatest(db, { before, beforeId, unreadOnly }), timeZone()]);
+  const last = items.at(-1);
+  const older = items.length === 60 && last ? `/latest?${new URLSearchParams({ ...(unreadOnly ? { show: "unread" } : {}), before: last.publishedAt, after: last.id })}` : null;
   return (
     <>
       <nav className="nv2-wrap" style={{ gap: "var(--s2)" }} aria-label="Show">

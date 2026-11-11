@@ -1,5 +1,5 @@
 import "server-only";
-import { lookup as dnsLookup, type LookupAddress } from "node:dns";
+import { lookup as dnsLookup, promises as dns, type LookupAddress } from "node:dns";
 import { BlockList, isIP } from "node:net";
 import { Agent, fetch } from "undici";
 
@@ -120,6 +120,25 @@ function decode(bytes: Uint8Array, contentType: string): string {
   } catch {
     return new TextDecoder("utf-8").decode(bytes).replace(/^﻿/, "");
   }
+}
+
+/**
+ * Check an address before Nova records it anywhere: a public http(s) URL whose host resolves
+ * only to public addresses. Fetching checks again at connection time, so a DNS answer that
+ * changes later is still caught.
+ */
+export async function assertPublicAddress(raw: string): Promise<URL> {
+  const url = checkUrl(raw, false);
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(host)) return url;
+  let addresses: LookupAddress[];
+  try {
+    addresses = await dns.lookup(host, { all: true });
+  } catch {
+    throw new FetchRefused(`${host} could not be found`);
+  }
+  if (!addresses.length || addresses.some((a) => isBlockedAddress(a.address))) throw new FetchRefused("Nova only reads public websites");
+  return url;
 }
 
 /** GET a public URL with redirects re-checked, a size cap, timeouts and conditional headers. */
