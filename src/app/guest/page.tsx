@@ -345,7 +345,7 @@ export default function GuestPage() {
             <p>Your subscriptions, articles, read history and preferences are saved in this browser using IndexedDB, not in your Supabase account.</p>
             <label className="guest-checkbox"><input type="checkbox" checked={unreadOnly} onChange={(event) => void changeUnreadOnly(event.target.checked)} /> Show only unread articles</label>
             <button className="guest-button" onClick={() => downloadFile("nova-guest.opml", opml(sources), "text/xml;charset=utf-8")}><Download size={16} /> Export subscriptions</button>
-            <p className="t-meta t-muted">Clearing this site's data, using private browsing, or removing the browser profile can delete your local library. Export OPML regularly. To sync across devices, sign in and import your OPML file into your account.</p>
+            <p className="t-meta t-muted">Clearing this site&apos;s data, using private browsing, or removing the browser profile can delete your local library. Export OPML regularly. To sync across devices, sign in and import your OPML file into your account.</p>
             <Link className="guest-button guest-primary" href="/sign-in">Sign in to sync</Link>
           </section>
         )}
