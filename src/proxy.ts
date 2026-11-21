@@ -1,16 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Keeps the Supabase session fresh on every page request and sends signed-out visitors to
-// sign in. Pages check the session again themselves; this only saves a round trip.
-
-const PUBLIC = [/^\/sign-in/, /^\/auth\//, /^\/setup/, /^\/api\/refresh/];
+// Keep signed-in sessions fresh, but let guests access only the explicit public paths.
+const PUBLIC = [/^\/sign-in(?:\/|$)/, /^\/auth\//, /^\/setup(?:\/|$)/, /^\/guest(?:\/|$)/, /^\/api\/guest\//, /^\/api\/refresh(?:\/|$)/];
 
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (process.env.NOVA_DEMO === "1" || !url || !key) return NextResponse.next({ request });
-
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -23,11 +20,10 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
   const path = request.nextUrl.pathname;
-  if (!signedIn && !PUBLIC.some((p) => p.test(path))) {
+  if (!signedIn && !PUBLIC.some((pattern) => pattern.test(path))) {
     const target = request.nextUrl.clone();
     target.pathname = "/sign-in";
     target.search = "";
