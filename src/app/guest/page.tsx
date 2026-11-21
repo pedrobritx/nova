@@ -85,6 +85,7 @@ export default function GuestPage() {
   const [items, setItems] = useState<GuestItem[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [ready, setReady] = useState(false);
+  const [todayCutoff, setTodayCutoff] = useState(0);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [address, setAddress] = useState("");
@@ -174,16 +175,18 @@ export default function GuestPage() {
     return () => { mounted = false; };
   }, [refresh]);
 
+  useEffect(() => { setTodayCutoff(Date.now() - 48 * 60 * 60 * 1000); }, []);
+
   const visibleItems = useMemo(() => {
     const followed = new Set(sources.map((source) => source.url));
-    const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
+    const twoDaysAgo = todayCutoff;
     return items.filter((item) =>
       followed.has(item.feedUrl) &&
       (!unreadOnly || !item.read) &&
       (tab !== "saved" || item.saved) &&
       (tab !== "today" || Date.parse(item.publishedAt) >= twoDaysAgo),
     ).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
-  }, [items, sources, tab, unreadOnly]);
+  }, [items, sources, tab, unreadOnly, todayCutoff]);
 
   const sourceByUrl = useMemo(() => new Map(sources.map((source) => [source.url, source])), [sources]);
   const unreadCount = items.filter((item) => !item.read && sourceByUrl.has(item.feedUrl)).length;
