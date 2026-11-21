@@ -162,6 +162,7 @@ export default function GuestPage() {
           readAll<GuestSource>("sources"), readAll<GuestItem>("items"), readAll<GuestPreference>("preferences"),
         ]);
         if (!mounted) return;
+        setTodayCutoff(Date.now() - 48 * 60 * 60 * 1000);
         setSources(loadedSources);
         setItems(loadedItems);
         setUnreadOnly(preferences.find((entry) => entry.key === "unreadOnly")?.value === "true");
@@ -174,8 +175,6 @@ export default function GuestPage() {
     void load();
     return () => { mounted = false; };
   }, [refresh]);
-
-  useEffect(() => { setTodayCutoff(Date.now() - 48 * 60 * 60 * 1000); }, []);
 
   const visibleItems = useMemo(() => {
     const followed = new Set(sources.map((source) => source.url));
