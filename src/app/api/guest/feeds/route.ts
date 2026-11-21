@@ -3,8 +3,6 @@ import { discoverFeeds } from "@/lib/feeds/discover";
 import { safeFetch } from "@/lib/feeds/net";
 import { looksLikeFeed, NotAFeed, parseFeedText } from "@/lib/feeds/parse";
 
-export const runtime = "nodejs";
-
 // Additional best-effort protection against bursts on the same server instance.
 // This is NOT a distributed limit: production also needs a platform-level per-IP rule.
 const RATE_WINDOW_MS = 60_000;
